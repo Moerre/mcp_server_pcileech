@@ -182,6 +182,13 @@ class PCILeechWrapper:
         0000    e9 4d 06 00 01 00 00 00  01 00 00 00 3f 00 18 10   .M..........?...
                 ^offset  ^8 hex bytes       ^8 hex bytes          ^ASCII
 
+        The format is fixed:
+        - 4 char hex offset
+        - 4 spaces
+        - 47 chars of hex data (16 bytes as "xx xx xx xx xx xx xx xx  xx xx xx xx xx xx xx xx")
+        - 3 spaces
+        - 16 chars ASCII representation
+
         Args:
             output: Raw PCILeech display output
 
@@ -191,35 +198,41 @@ class PCILeechWrapper:
         hex_data = []
 
         for line in output.splitlines():
-            line = line.strip()
-
             # Skip headers and empty lines
             if not line or 'Memory Display:' in line or 'Contents for address:' in line:
                 continue
 
+            line = line.rstrip()  # Only strip trailing whitespace
+
             # Match lines starting with 4-digit hex offset
             if re.match(r'^[0-9a-fA-F]{4}\s+', line):
-                # Split line: offset | hex_part1 | hex_part2 | ascii
-                # Format: "0000    e9 4d ... 00 00  01 00 ... 10   .M...?..."
+                # More robust method: extract all hex byte pairs using regex
+                # This finds all 2-character hex sequences that are word-bounded
+                # Skip the first match which is the offset
 
-                # Remove the offset (first 4 chars + spaces)
-                without_offset = line[4:].lstrip()
+                # First, try to extract hex data from fixed positions
+                # Format: "0060    xx xx xx xx xx xx xx xx  xx xx xx xx xx xx xx xx   ASCII"
+                # Position: 0-3=offset, 4-7=spaces, 8-54=hex data (47 chars), 55-57=spaces, 58+=ASCII
 
-                # Find ASCII part (starts after 2+ consecutive spaces)
-                # Split by 2+ spaces
-                parts = re.split(r'\s{2,}', without_offset)
+                if len(line) >= 56:
+                    # Extract the hex portion (positions 8-55, which is 48 chars)
+                    # Format: "xx xx xx xx xx xx xx xx  xx xx xx xx xx xx xx xx"
+                    # = 8*3-1 + 2 + 8*3-1 = 23 + 2 + 23 = 48 chars
+                    hex_portion = line[8:56]
+                else:
+                    # Fallback for shorter lines
+                    hex_portion = line[4:].lstrip()
+                    # Try to find where ASCII starts (after 3+ spaces following hex data)
+                    ascii_match = re.search(r'\s{3,}[^\s]', hex_portion)
+                    if ascii_match:
+                        hex_portion = hex_portion[:ascii_match.start()]
 
-                # The hex data is everything before the last part (ASCII)
-                if len(parts) >= 2:
-                    # Everything except the last part (ASCII) is hex data
-                    hex_parts = parts[:-1]
-                    # Join all hex parts and remove spaces
-                    hex_bytes = ''.join(hex_parts).replace(' ', '')
-                    hex_data.append(hex_bytes)
-                elif len(parts) == 1:
-                    # No ASCII part, entire line is hex
-                    hex_bytes = parts[0].replace(' ', '')
-                    hex_data.append(hex_bytes)
+                # Extract all hex byte pairs (2 consecutive hex chars)
+                hex_bytes = re.findall(r'[0-9a-fA-F]{2}', hex_portion)
+
+                # Validate we got reasonable number of bytes (should be 16 per line)
+                if hex_bytes:
+                    hex_data.append(''.join(hex_bytes))
 
         return ''.join(hex_data)
 
