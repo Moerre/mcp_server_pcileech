@@ -33,7 +33,7 @@ A Model Context Protocol (MCP) server that provides a standardized interface to 
 ### 1. Clone Repository
 
 ```bash
-git clone <https://github.com/Evan7198/mcp_server_pcileech>
+git clone https://github.com/Evan7198/mcp_server_pcileech
 cd mcp_server_pcileech
 ```
 
